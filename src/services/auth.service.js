@@ -98,6 +98,48 @@ class AuthService {
 
     return this.generateTokens(user);
   }
+
+  /**
+   * Create password reset token
+   */
+  async createPasswordResetToken(email) {
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Return null but don't reveal if user exists
+      return null;
+    }
+
+    const resetToken = jwt.sign(
+      { userId: user._id, type: 'password-reset' },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    logger.info(`Password reset requested for: ${email}`);
+    return resetToken;
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token, newPassword) {
+    const decoded = this.verifyToken(token);
+
+    if (decoded.type !== 'password-reset') {
+      throw new AppError('Invalid password reset token', 400);
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    logger.info(`Password reset completed for: ${user.email}`);
+    return true;
+  }
 }
 
 module.exports = new AuthService();
